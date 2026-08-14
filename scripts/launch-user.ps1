@@ -88,9 +88,15 @@ function Build-Release {
       exit 1
     }
   }
+  $before = if (Test-Path $ReleaseExe) { (Get-Item $ReleaseExe).LastWriteTimeUtc } else { [datetime]::MinValue }
+
   $cmd = "`"$vcvars`" && cd /d `"$Root`" && npm run build:app"
   cmd /c $cmd
-  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $ReleaseExe)) {
+
+  # 존재 검사만으로는 부족합니다. 빌드가 실패해도 이전 exe가 남아 있어
+  # 그대로 통과하고, 낡은 실행 파일이 새것처럼 설치됩니다.
+  $after = if (Test-Path $ReleaseExe) { (Get-Item $ReleaseExe).LastWriteTimeUtc } else { [datetime]::MinValue }
+  if ($LASTEXITCODE -ne 0 -or $after -le $before) {
     Show-Error "Build failed. Check Node.js / Rust / VS Build Tools."
     exit 1
   }
@@ -105,6 +111,9 @@ function Stop-RunningWidget {
 }
 
 if (Test-NeedsRebuild) {
+  # 빌드보다 먼저 끕니다. 실행 중이면 Windows가 exe에 쓰기 잠금을 걸어
+  # cargo가 링크 단계에서 os error 5로 실패합니다.
+  Stop-RunningWidget
   Build-Release
 }
 

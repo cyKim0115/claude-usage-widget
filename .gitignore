@@ -1,0 +1,26 @@
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local secrets / dumps (never commit tokens)
+*.token
+*.pem
+.env
+.env.*
+.credentials.json
+spike-dump*.json
+scripts/__pycache__/

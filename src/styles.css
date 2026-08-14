@@ -1,0 +1,206 @@
+:root {
+  color-scheme: dark;
+  --bg: rgba(22, 24, 28, 0.92);
+  --fg: #e8eaed;
+  --muted: #9aa0a6;
+  --bar: #2a2f36;
+  --fill: #c96442;
+  --fill-warn: #e0a95b;
+  --fill-hot: #e0524a;
+  --border: rgba(255, 255, 255, 0.08);
+  font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  user-select: none;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  width: 100vw;
+}
+
+/* 높이를 지정하지 않습니다. 트랙 수에 따른 실제 높이를 main.ts가 재서
+   창 크기를 맞추므로, 여기서 100%를 잡으면 측정값이 창 높이에 묶입니다. */
+.widget {
+  padding: 10px 12px 8px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.header,
+.footer,
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.tracks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.track {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* 지금 한도에 걸리는 창을 한눈에 구분합니다. */
+.track.active .label {
+  color: var(--fg);
+}
+
+.caption {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bar);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: var(--fill);
+  transition: width 0.35s ease;
+}
+
+.fill.warn {
+  background: var(--fill-warn);
+}
+
+.fill.hot {
+  background: var(--fill-hot);
+}
+
+.empty {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 6px 0;
+}
+
+.status {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.widget.error .status {
+  color: var(--fill-hot);
+}
+
+.context-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+
+.context-backdrop.hidden {
+  display: none;
+}
+
+.context-menu {
+  position: fixed;
+  min-width: 148px;
+  max-width: 260px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(18, 20, 24, 0.98);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 1000;
+}
+
+.context-menu.hidden {
+  display: none;
+}
+
+.menu-account {
+  padding: 6px 10px 4px;
+}
+
+.menu-email {
+  font-size: 11px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-plan {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.menu-plan:empty {
+  display: none;
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 2px 0;
+  background: var(--border);
+}
+
+.menu-item {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.menu-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.menu-item.danger {
+  color: #ffb4ab;
+}

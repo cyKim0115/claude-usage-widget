@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Claude Usage</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <div class="widget" id="widget" data-tauri-drag-region>
+      <header class="header" data-tauri-drag-region>
+        <span class="title" data-tauri-drag-region>Claude Usage</span>
+      </header>
+
+      <!-- 트랙은 플랜에 따라 개수가 달라져서 main.ts가 채웁니다. -->
+      <div class="tracks" id="tracks"></div>
+
+      <footer class="footer" data-tauri-drag-region>
+        <span id="status" class="status">loading…</span>
+      </footer>
+    </div>
+
+    <div id="context-backdrop" class="context-backdrop hidden">
+      <div id="context-menu" class="context-menu hidden">
+        <div class="menu-account">
+          <div id="menu-email" class="menu-email">—</div>
+          <div id="menu-plan" class="menu-plan"></div>
+        </div>
+        <div class="menu-sep"></div>
+        <button id="menu-autostart" class="menu-item" type="button">시작프로그램</button>
+        <button id="menu-refresh" class="menu-item" type="button">새로고침</button>
+        <button id="menu-quit" class="menu-item danger" type="button">종료</button>
+      </div>
+    </div>
+  </body>
+</html>

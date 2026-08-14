@@ -1,0 +1,23 @@
+[package]
+name = "claude-usage-widget"
+version = "0.1.0"
+description = "Desktop widget for Claude Code usage limits"
+authors = ["cykim"]
+edition = "2021"
+
+[lib]
+name = "claude_usage_widget_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-window-state = "2"
+auto-launch = "0.5"
+winreg = "0.55"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2.12", features = ["json"] }
+thiserror = "2"

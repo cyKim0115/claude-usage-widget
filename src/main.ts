@@ -179,6 +179,10 @@ function render(snap: UsageSnapshot) {
   const widget = $("widget");
   widget.classList.toggle("error", snap.state !== "OK");
 
+  // 플랜에 따라 트랙 구성이 달라져서, 지금 보는 값이 어느 플랜 기준인지 함께 둡니다.
+  // 로그인 전이나 갱신 실패면 빈 문자열이라 헤더가 제목만 남습니다.
+  $("plan").textContent = snap.planLabel ?? "";
+
   const tracks = $("tracks");
   tracks.replaceChildren();
 

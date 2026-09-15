@@ -7,6 +7,7 @@ use install::{
     autostart_disable, autostart_enable, autostart_is_enabled, cleanup_stale_debug_autostart,
     ensure_installed_release, guard_debug_requires_vite,
 };
+use tauri::Manager;
 use tauri_plugin_window_state::StateFlags;
 use usage::{fetch_error, fetch_usage, need_login, UsageError, UsageSnapshot};
 
@@ -35,6 +36,16 @@ fn get_poll_interval_ms() -> u64 {
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+/// The preference lives in the webview, so the menu and startup both push it
+/// onto the main window through here.
+#[tauri::command]
+fn set_always_on_top(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    window.set_always_on_top(enabled).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -82,7 +93,8 @@ pub fn run() {
             enable_autostart,
             disable_autostart,
             is_autostart_enabled,
-            install_release_copy
+            install_release_copy,
+            set_always_on_top
         ])
         .setup(|_app| {
             cleanup_stale_debug_autostart();

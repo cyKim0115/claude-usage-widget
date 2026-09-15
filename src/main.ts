@@ -25,6 +25,18 @@ type ContextMenuState = {
   isDevBuild: boolean;
 };
 
+const ALWAYS_ON_TOP_KEY = "claude-usage-always-on-top";
+
+/** The widget shipped always-on-top, so an unset key must stay on. */
+function loadAlwaysOnTop(): boolean {
+  return localStorage.getItem(ALWAYS_ON_TOP_KEY) !== "false";
+}
+
+async function setAlwaysOnTop(enabled: boolean) {
+  localStorage.setItem(ALWAYS_ON_TOP_KEY, enabled ? "true" : "false");
+  await invoke("set_always_on_top", { enabled });
+}
+
 const WINDOW_WIDTH = 340;
 
 let lastSnapshot: UsageSnapshot | null = null;
@@ -74,6 +86,8 @@ function showContextMenu(state: ContextMenuState) {
   } else {
     menuAutostart.textContent = `${state.autostartEnabled ? "✓ " : ""}시작프로그램`;
   }
+
+  $("menu-always-on-top").textContent = `${loadAlwaysOnTop() ? "✓ " : ""}항상 위에 표시`;
 
   const menuRect = menu.getBoundingClientRect();
   const maxX = Math.max(8, window.innerWidth - menuRect.width - 8);
@@ -230,8 +244,17 @@ async function refresh() {
 async function boot() {
   const backdrop = $("context-backdrop");
   const menuAutostart = $("menu-autostart") as HTMLButtonElement;
+  const menuAlwaysOnTop = $("menu-always-on-top") as HTMLButtonElement;
   const menuRefresh = $("menu-refresh") as HTMLButtonElement;
   const menuQuit = $("menu-quit") as HTMLButtonElement;
+
+  // tauri.conf.json pins the window to always-on-top, so a user who turned it
+  // off gets it restored as soon as the webview boots.
+  try {
+    await invoke("set_always_on_top", { enabled: loadAlwaysOnTop() });
+  } catch {
+    /* browser preview */
+  }
 
   window.addEventListener("contextmenu", async (event) => {
     event.preventDefault();
@@ -288,6 +311,24 @@ async function boot() {
       window.alert(String(e));
     } finally {
       menuAutostart.disabled = false;
+      showContextMenu({
+        x: parseFloat($("context-menu").style.left || "0"),
+        y: parseFloat($("context-menu").style.top || "0"),
+        autostartEnabled: await getAutostartEnabled(),
+        isDevBuild: await getIsDevBuild(),
+      });
+    }
+  });
+
+  menuAlwaysOnTop.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    menuAlwaysOnTop.disabled = true;
+    try {
+      await setAlwaysOnTop(!loadAlwaysOnTop());
+    } catch (e) {
+      window.alert(String(e));
+    } finally {
+      menuAlwaysOnTop.disabled = false;
       showContextMenu({
         x: parseFloat($("context-menu").style.left || "0"),
         y: parseFloat($("context-menu").style.top || "0"),

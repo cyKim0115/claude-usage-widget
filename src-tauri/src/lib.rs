@@ -7,11 +7,12 @@ use install::{
     autostart_disable, autostart_enable, autostart_is_enabled, cleanup_stale_debug_autostart,
     ensure_installed_release, guard_debug_requires_vite,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager, WindowEvent};
 use tauri_plugin_window_state::StateFlags;
 use usage::{fetch_error, fetch_usage, need_login, UsageError, UsageSnapshot};
 
 const POLL_INTERVAL_MS: u64 = 300_000;
+const SETTINGS_LABEL: &str = "settings";
 
 #[tauri::command]
 fn get_usage() -> UsageSnapshot {
@@ -36,6 +37,29 @@ fn get_poll_interval_ms() -> u64 {
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+/// 설정 창은 tauri.conf.json에 `visible: false`로 미리 선언해 두고 show/hide만
+/// 토글한다. 클릭마다 새로 만들면 WebView2 초기화 지연이 그대로 노출된다.
+/// 숨겨 뒀던 창을 다시 쓰는 것이라, 값을 새로 읽으라고 이벤트도 함께 보낸다.
+#[tauri::command]
+fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window(SETTINGS_LABEL)
+        .ok_or_else(|| "settings window not found".to_string())?;
+    window.show().map_err(|e| e.to_string())?;
+    window.unminimize().map_err(|e| e.to_string())?;
+    window.set_focus().map_err(|e| e.to_string())?;
+    window.emit("settings-open", ()).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn close_settings_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(SETTINGS_LABEL) {
+        window.hide().map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 /// The preference lives in the webview, so the menu and startup both push it
@@ -83,12 +107,15 @@ pub fn run() {
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(StateFlags::POSITION)
+                .with_denylist(&[SETTINGS_LABEL])
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
             get_usage,
             get_poll_interval_ms,
             quit_app,
+            open_settings_window,
+            close_settings_window,
             is_dev_build,
             enable_autostart,
             disable_autostart,
@@ -96,6 +123,16 @@ pub fn run() {
             install_release_copy,
             set_always_on_top
         ])
+        .on_window_event(|window, event| {
+            if window.label() != SETTINGS_LABEL {
+                return;
+            }
+            // 설정 창을 닫아도 앱은 살아 있어야 한다. 파괴하지 않고 숨긴다.
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .setup(|_app| {
             cleanup_stale_debug_autostart();
             // Release builds keep a stable copy under LOCALAPPDATA for shortcuts/autostart.

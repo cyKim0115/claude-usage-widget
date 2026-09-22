@@ -1,41 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-
-type TrackUsage = {
-  label: string;
-  kind: string;
-  percent: number;
-  severity: string;
-  resetsAt: string | null;
-  isActive: boolean;
-};
-
-type UsageSnapshot = {
-  state: string;
-  accountEmail: string | null;
-  planLabel: string | null;
-  tracks: TrackUsage[];
-  error: string | null;
-};
-
-type ContextMenuState = {
-  x: number;
-  y: number;
-  autostartEnabled: boolean;
-  isDevBuild: boolean;
-};
-
-const ALWAYS_ON_TOP_KEY = "claude-usage-always-on-top";
-
-/** The widget shipped always-on-top, so an unset key must stay on. */
-function loadAlwaysOnTop(): boolean {
-  return localStorage.getItem(ALWAYS_ON_TOP_KEY) !== "false";
-}
-
-async function setAlwaysOnTop(enabled: boolean) {
-  localStorage.setItem(ALWAYS_ON_TOP_KEY, enabled ? "true" : "false");
-  await invoke("set_always_on_top", { enabled });
-}
+import { loadAlwaysOnTop } from "./preferences";
+import type { TrackUsage, UsageSnapshot } from "./types";
 
 const WINDOW_WIDTH = 340;
 
@@ -47,54 +14,29 @@ function $(id: string): HTMLElement {
   return el;
 }
 
-async function getAutostartEnabled(): Promise<boolean> {
-  try {
-    return await invoke<boolean>("is_autostart_enabled");
-  } catch {
-    return false;
-  }
-}
-
-async function getIsDevBuild(): Promise<boolean> {
-  try {
-    return await invoke<boolean>("is_dev_build");
-  } catch {
-    return false;
-  }
-}
-
 function hideContextMenu() {
   $("context-menu").classList.add("hidden");
   $("context-backdrop").classList.add("hidden");
 }
 
-function showContextMenu(state: ContextMenuState) {
+/**
+ * 메뉴에는 설정과 종료만 둡니다. 창이 트랙 수에 맞춰 160px 안팎까지 줄어들어서,
+ * 항목이 늘어나면 메뉴가 창 밖으로 잘려 종료를 누를 수 없게 됩니다. 나머지
+ * 항목은 별도 설정 창(settings.html)으로 옮겼습니다.
+ */
+function showContextMenu(x: number, y: number) {
   const backdrop = $("context-backdrop");
   const menu = $("context-menu");
-  const menuAutostart = $("menu-autostart");
-
-  // 위젯 본체는 사용량만 보여주고, 어느 계정인지는 여기서 확인합니다.
-  // CLI 로그인 계정과 데스크톱 앱 계정이 다를 수 있어 표시가 필요합니다.
-  $("menu-email").textContent = lastSnapshot?.accountEmail ?? "로그인 정보 없음";
-  $("menu-plan").textContent = lastSnapshot?.planLabel ?? "";
 
   backdrop.classList.remove("hidden");
   menu.classList.remove("hidden");
-
-  if (state.isDevBuild) {
-    menuAutostart.textContent = "시작프로그램 (시작.bat 사용)";
-  } else {
-    menuAutostart.textContent = `${state.autostartEnabled ? "✓ " : ""}시작프로그램`;
-  }
-
-  $("menu-always-on-top").textContent = `${loadAlwaysOnTop() ? "✓ " : ""}항상 위에 표시`;
 
   const menuRect = menu.getBoundingClientRect();
   const maxX = Math.max(8, window.innerWidth - menuRect.width - 8);
   const maxY = Math.max(8, window.innerHeight - menuRect.height - 8);
 
-  menu.style.left = `${Math.min(state.x, maxX)}px`;
-  menu.style.top = `${Math.min(state.y, maxY)}px`;
+  menu.style.left = `${Math.min(x, maxX)}px`;
+  menu.style.top = `${Math.min(y, maxY)}px`;
 }
 
 function formatResetRemaining(resetsAt: string | null): string {
@@ -224,6 +166,11 @@ function render(snap: UsageSnapshot) {
   }
 
   void syncWindowHeight();
+
+  // 설정 창이 계정/플랜을 직접 조회하지 않고 이 값을 받아 그립니다.
+  void emit("usage-updated", snap).catch(() => {
+    /* 설정 창이 없을 수도 있어 실패는 무시합니다 */
+  });
 }
 
 async function refresh() {
@@ -243,9 +190,7 @@ async function refresh() {
 
 async function boot() {
   const backdrop = $("context-backdrop");
-  const menuAutostart = $("menu-autostart") as HTMLButtonElement;
-  const menuAlwaysOnTop = $("menu-always-on-top") as HTMLButtonElement;
-  const menuRefresh = $("menu-refresh") as HTMLButtonElement;
+  const menuSettings = $("menu-settings") as HTMLButtonElement;
   const menuQuit = $("menu-quit") as HTMLButtonElement;
 
   // tauri.conf.json pins the window to always-on-top, so a user who turned it
@@ -256,14 +201,9 @@ async function boot() {
     /* browser preview */
   }
 
-  window.addEventListener("contextmenu", async (event) => {
+  window.addEventListener("contextmenu", (event) => {
     event.preventDefault();
-    showContextMenu({
-      x: event.clientX,
-      y: event.clientY,
-      autostartEnabled: await getAutostartEnabled(),
-      isDevBuild: await getIsDevBuild(),
-    });
+    showContextMenu(event.clientX, event.clientY);
   });
 
   backdrop.addEventListener("pointerdown", (event) => {
@@ -290,64 +230,35 @@ async function boot() {
     if (event.key === "Escape") hideContextMenu();
   });
 
-  menuAutostart.addEventListener("click", async (event) => {
-    event.stopPropagation();
-    menuAutostart.disabled = true;
-    try {
-      const isDev = await getIsDevBuild();
-      if (isDev) {
-        window.alert(
-          "개발 모드에서는 시작프로그램을 바꿀 수 없습니다.\n\n「시작.bat」으로 설치·실행한 뒤, 위젯에서 다시 우클릭 → 시작프로그램을 켜 주세요.",
-        );
-        return;
-      }
-      const enabled = await getAutostartEnabled();
-      if (enabled) {
-        await invoke("disable_autostart");
-      } else {
-        await invoke("enable_autostart");
-      }
-    } catch (e) {
-      window.alert(String(e));
-    } finally {
-      menuAutostart.disabled = false;
-      showContextMenu({
-        x: parseFloat($("context-menu").style.left || "0"),
-        y: parseFloat($("context-menu").style.top || "0"),
-        autostartEnabled: await getAutostartEnabled(),
-        isDevBuild: await getIsDevBuild(),
-      });
-    }
-  });
-
-  menuAlwaysOnTop.addEventListener("click", async (event) => {
-    event.stopPropagation();
-    menuAlwaysOnTop.disabled = true;
-    try {
-      await setAlwaysOnTop(!loadAlwaysOnTop());
-    } catch (e) {
-      window.alert(String(e));
-    } finally {
-      menuAlwaysOnTop.disabled = false;
-      showContextMenu({
-        x: parseFloat($("context-menu").style.left || "0"),
-        y: parseFloat($("context-menu").style.top || "0"),
-        autostartEnabled: await getAutostartEnabled(),
-        isDevBuild: await getIsDevBuild(),
-      });
-    }
-  });
-
-  menuRefresh.addEventListener("click", async (event) => {
+  menuSettings.addEventListener("click", async (event) => {
     event.stopPropagation();
     hideContextMenu();
-    await refresh();
+    try {
+      await invoke("open_settings_window");
+    } catch (e) {
+      window.alert(String(e));
+    }
   });
 
   menuQuit.addEventListener("click", async (event) => {
     event.stopPropagation();
     hideContextMenu();
     await invoke("quit_app");
+  });
+
+  // 설정 창이 열릴 때 계정 표시에 쓸 스냅샷을 요구합니다. 아직 한 번도 못
+  // 받아왔다면 새로 조회해서, 설정 창이 빈 값으로 남지 않게 합니다.
+  await listen("usage-requested", () => {
+    if (lastSnapshot) {
+      void emit("usage-updated", lastSnapshot);
+    } else {
+      void refresh();
+    }
+  });
+
+  // 새로고침은 위젯이 수행합니다. 두 창이 각자 조회하면 폴링 간격이 어긋납니다.
+  await listen("refresh-requested", () => {
+    void refresh();
   });
 
   await refresh();

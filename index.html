@@ -23,15 +23,10 @@
     </div>
 
     <div id="context-backdrop" class="context-backdrop hidden">
+      <!-- 창이 160px 안팎까지 줄어들어서 항목이 늘면 메뉴가 잘립니다.
+           나머지는 설정 창(settings.html)에 있습니다. -->
       <div id="context-menu" class="context-menu hidden">
-        <div class="menu-account">
-          <div id="menu-email" class="menu-email">—</div>
-          <div id="menu-plan" class="menu-plan"></div>
-        </div>
-        <div class="menu-sep"></div>
-        <button id="menu-autostart" class="menu-item" type="button">시작프로그램</button>
-        <button id="menu-always-on-top" class="menu-item" type="button">항상 위에 표시</button>
-        <button id="menu-refresh" class="menu-item" type="button">새로고침</button>
+        <button id="menu-settings" class="menu-item" type="button">설정</button>
         <button id="menu-quit" class="menu-item danger" type="button">종료</button>
       </div>
     </div>

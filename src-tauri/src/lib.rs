@@ -102,6 +102,16 @@ pub fn run() {
     guard_debug_requires_vite();
 
     tauri::Builder::default()
+        // 다른 플러그인보다 먼저 등록해야 두 번째 실행이 초기화 전에 끝납니다.
+        // 작업 표시줄 버튼이 없어 가려진 위젯을 꺼낼 길이 재실행뿐이라,
+        // 새로 띄우지 않고 기존 창을 앞으로 가져옵니다.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         // 위치만 복원합니다. 창 높이는 트랙 수에 따라 프런트가 정하므로,
         // 크기까지 저장하면 지난 실행의 트랙 수가 이번 실행을 덮어씁니다.
         .plugin(

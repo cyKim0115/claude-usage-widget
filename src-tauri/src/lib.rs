@@ -1,6 +1,9 @@
 mod auth;
+mod browser_login;
 mod install;
+mod secure_store;
 mod usage;
+mod web_session;
 
 use auth::{default_credentials_path, read_credentials};
 use install::{
@@ -9,24 +12,96 @@ use install::{
 };
 use tauri::{Emitter, Manager, WindowEvent};
 use tauri_plugin_window_state::StateFlags;
-use usage::{fetch_error, fetch_usage, need_login, UsageError, UsageSnapshot};
+use usage::{
+    fetch_error, fetch_usage, need_login, UsageError, UsageSnapshot, SOURCE_CLAUDE_CODE, SOURCE_WEB,
+};
+use web_session::WebStatus;
 
 const POLL_INTERVAL_MS: u64 = 300_000;
 const SETTINGS_LABEL: &str = "settings";
 
-#[tauri::command]
-fn get_usage() -> UsageSnapshot {
+fn usage_via_claude_code() -> UsageSnapshot {
     let path = default_credentials_path();
     match read_credentials(&path) {
         Ok(cred) => match fetch_usage(&cred.access_token) {
             Ok(snap) => snap,
             // 만료 전 토큰이라도 서버가 거부할 수 있습니다. 그때도 갱신 실패가
             // 아니라 로그인 문제로 안내해야 사용자가 할 일이 분명해집니다.
-            Err(UsageError::Unauthorized) => need_login(UsageError::Unauthorized.to_string()),
-            Err(e) => fetch_error(e.to_string()),
+            Err(UsageError::Unauthorized) => {
+                need_login(SOURCE_CLAUDE_CODE, UsageError::Unauthorized.to_string())
+            }
+            Err(e) => fetch_error(SOURCE_CLAUDE_CODE, e.to_string()),
         },
-        Err(e) => need_login(e.to_string()),
+        Err(e) => need_login(SOURCE_CLAUDE_CODE, e.to_string()),
     }
+}
+
+/// 데이터 소스 선택. `auto`는 웹 세션이 있으면 웹 세션, 없으면 Claude Code OAuth입니다.
+/// 웹 세션이 로그인 필요로 끝나면 Claude Code로 한 번 더 시도해 보여 줄 값이 있으면 씁니다.
+fn usage_for(source: &str) -> UsageSnapshot {
+    match source {
+        SOURCE_CLAUDE_CODE => usage_via_claude_code(),
+        SOURCE_WEB => web_session::usage(),
+        _ => {
+            if !web_session::has_session() {
+                return usage_via_claude_code();
+            }
+            let web = web_session::usage();
+            if web.state != "NeedLogin" {
+                return web;
+            }
+            let cli = usage_via_claude_code();
+            if cli.state == "OK" {
+                cli
+            } else {
+                web
+            }
+        }
+    }
+}
+
+/// 웹 세션은 401 때 headless 갱신(최대 20초)까지 갈 수 있어 메인 스레드 밖에서 돕니다.
+#[tauri::command]
+async fn get_usage(source: Option<String>) -> UsageSnapshot {
+    let source = source.unwrap_or_default();
+    tauri::async_runtime::spawn_blocking(move || usage_for(&source))
+        .await
+        .unwrap_or_else(|e| fetch_error(SOURCE_CLAUDE_CODE, format!("FetchError: {e}")))
+}
+
+#[tauri::command]
+fn get_web_status() -> WebStatus {
+    web_session::status()
+}
+
+/// 로그인 창을 띄우고 사용자가 로그인 후 창을 닫을 때까지 기다립니다(최대 10분).
+/// 진행 문구는 `web-login-status` 이벤트로 설정 창에 보냅니다.
+#[tauri::command]
+async fn web_login(app: tauri::AppHandle) -> Result<WebStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let emit = |message: &str| {
+            let _ = app.emit("web-login-status", message);
+        };
+        web_session::login(&emit)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn web_disconnect() -> Result<WebStatus, String> {
+    web_session::disconnect()?;
+    Ok(web_session::status())
+}
+
+#[tauri::command]
+async fn web_reset_profile() -> Result<WebStatus, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        web_session::reset_profile()?;
+        Ok(web_session::status())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -50,7 +125,9 @@ fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
     window.show().map_err(|e| e.to_string())?;
     window.unminimize().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
-    window.emit("settings-open", ()).map_err(|e| e.to_string())?;
+    window
+        .emit("settings-open", ())
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -131,7 +208,11 @@ pub fn run() {
             disable_autostart,
             is_autostart_enabled,
             install_release_copy,
-            set_always_on_top
+            set_always_on_top,
+            get_web_status,
+            web_login,
+            web_disconnect,
+            web_reset_profile
         ])
         .on_window_event(|window, event| {
             if window.label() != SETTINGS_LABEL {

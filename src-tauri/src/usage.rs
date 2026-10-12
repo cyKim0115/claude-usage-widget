@@ -6,6 +6,9 @@ const USAGE_PATH: &str = "/api/oauth/usage";
 const PROFILE_PATH: &str = "/api/oauth/profile";
 const OAUTH_BETA: &str = "oauth-2025-04-20";
 
+pub const SOURCE_CLAUDE_CODE: &str = "claudeCode";
+pub const SOURCE_WEB: &str = "web";
+
 #[derive(Debug, Error)]
 pub enum UsageError {
     #[error("NeedLogin: 토큰이 거부됐습니다 (401)")]
@@ -32,6 +35,8 @@ pub struct TrackUsage {
 #[serde(rename_all = "camelCase")]
 pub struct UsageSnapshot {
     pub state: String,
+    /// `claudeCode`(CLI OAuth) 또는 `web`(위젯 전용 브라우저 로그인).
+    pub source: Option<String>,
     pub account_email: Option<String>,
     pub plan_label: Option<String>,
     pub tracks: Vec<TrackUsage>,
@@ -47,6 +52,13 @@ pub struct UsageSnapshot {
 struct UsageResponse {
     #[serde(default)]
     limits: Vec<LimitEntry>,
+}
+
+/// `limits[]`가 없을 때 보는 기간별 창. 응답에 실제로 값이 있는 창만 트랙이 됩니다.
+#[derive(Debug, Deserialize)]
+struct WindowEntry {
+    utilization: Option<f64>,
+    resets_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -134,7 +146,18 @@ fn label_for(entry: &LimitEntry) -> String {
 }
 
 fn plan_label(org: &ProfileOrg) -> Option<String> {
-    let base = match org.organization_type.as_deref()? {
+    plan_label_from(
+        org.organization_type.as_deref(),
+        org.rate_limit_tier.as_deref(),
+    )
+}
+
+/// `organization_type`(예: `claude_max`)과 `rate_limit_tier`로 헤더에 쓸 플랜 이름을 만듭니다.
+pub fn plan_label_from(
+    organization_type: Option<&str>,
+    rate_limit_tier: Option<&str>,
+) -> Option<String> {
+    let base = match organization_type? {
         "claude_max" => "Max",
         "claude_pro" => "Pro",
         "claude_team" => "Team",
@@ -142,9 +165,7 @@ fn plan_label(org: &ProfileOrg) -> Option<String> {
     };
 
     // "default_claude_max_20x" 처럼 tier 끝에 배수가 붙어 옵니다.
-    let multiplier = org
-        .rate_limit_tier
-        .as_deref()
+    let multiplier = rate_limit_tier
         .and_then(|tier| tier.rsplit('_').next())
         .filter(|seg| seg.ends_with('x') && seg.len() <= 4);
 
@@ -154,33 +175,71 @@ fn plan_label(org: &ProfileOrg) -> Option<String> {
     })
 }
 
+/// 사용량 응답을 트랙으로 바꿉니다. OAuth와 claude.ai 웹 응답이 같은 `limits[]`를 줍니다.
+///
+/// `limits[]`가 없으면 기간별 창(`five_hour` 등) 중 값이 있는 것만 씁니다. 응답에 없는 창을
+/// 0%로 만들어 넣지 않습니다. 사용률이 빠진 항목도 0%로 그리지 않고 건너뜁니다.
+pub fn tracks_from_usage(value: serde_json::Value) -> Result<Vec<TrackUsage>, UsageError> {
+    let windows = window_tracks(&value);
+    let usage: UsageResponse =
+        serde_json::from_value(value).map_err(|e| UsageError::Parse(e.to_string()))?;
+
+    if usage.limits.is_empty() {
+        return Ok(windows);
+    }
+    Ok(usage
+        .limits
+        .iter()
+        .filter_map(|entry| {
+            Some(TrackUsage {
+                label: label_for(entry),
+                kind: entry.kind.clone().unwrap_or_else(|| "unknown".into()),
+                percent: entry.percent?,
+                severity: entry.severity.clone().unwrap_or_else(|| "normal".into()),
+                resets_at: entry.resets_at.clone(),
+                is_active: entry.is_active.unwrap_or(false),
+            })
+        })
+        .collect())
+}
+
+fn window_tracks(value: &serde_json::Value) -> Vec<TrackUsage> {
+    const WINDOWS: [(&str, &str, &str); 4] = [
+        ("five_hour", "session", "5시간"),
+        ("seven_day", "weekly_all", "주간"),
+        ("seven_day_opus", "weekly_scoped", "주간 · Opus"),
+        ("seven_day_sonnet", "weekly_scoped", "주간 · Sonnet"),
+    ];
+    WINDOWS
+        .iter()
+        .filter_map(|(key, kind, label)| {
+            let entry: WindowEntry = serde_json::from_value(value.get(*key)?.clone()).ok()?;
+            Some(TrackUsage {
+                label: (*label).into(),
+                kind: (*kind).into(),
+                percent: entry.utilization?,
+                severity: "normal".into(),
+                resets_at: entry.resets_at,
+                is_active: false,
+            })
+        })
+        .collect()
+}
+
 pub fn fetch_usage(token: &str) -> Result<UsageSnapshot, UsageError> {
     let usage_val = get_json(USAGE_PATH, token)?;
     // 프로필은 부가 정보(계정·플랜)라 실패해도 사용량 표시를 막지 않습니다.
     let profile_val = get_json(PROFILE_PATH, token).unwrap_or_else(|_| serde_json::json!({}));
 
-    let usage: UsageResponse =
-        serde_json::from_value(usage_val).map_err(|e| UsageError::Parse(e.to_string()))?;
+    let tracks = tracks_from_usage(usage_val)?;
     let profile: ProfileResponse = serde_json::from_value(profile_val).unwrap_or(ProfileResponse {
         account: None,
         organization: None,
     });
 
-    let tracks = usage
-        .limits
-        .iter()
-        .map(|entry| TrackUsage {
-            label: label_for(entry),
-            kind: entry.kind.clone().unwrap_or_else(|| "unknown".into()),
-            percent: entry.percent.unwrap_or(0.0),
-            severity: entry.severity.clone().unwrap_or_else(|| "normal".into()),
-            resets_at: entry.resets_at.clone(),
-            is_active: entry.is_active.unwrap_or(false),
-        })
-        .collect();
-
     Ok(UsageSnapshot {
         state: "OK".into(),
+        source: Some(SOURCE_CLAUDE_CODE.into()),
         account_email: profile.account.and_then(|a| a.email),
         plan_label: profile.organization.as_ref().and_then(plan_label),
         tracks,
@@ -188,9 +247,10 @@ pub fn fetch_usage(token: &str) -> Result<UsageSnapshot, UsageError> {
     })
 }
 
-fn empty_snapshot(state: &str, message: String) -> UsageSnapshot {
+fn empty_snapshot(state: &str, source: &str, message: String) -> UsageSnapshot {
     UsageSnapshot {
         state: state.into(),
+        source: Some(source.into()),
         account_email: None,
         plan_label: None,
         tracks: Vec::new(),
@@ -198,10 +258,68 @@ fn empty_snapshot(state: &str, message: String) -> UsageSnapshot {
     }
 }
 
-pub fn need_login(message: String) -> UsageSnapshot {
-    empty_snapshot("NeedLogin", message)
+pub fn need_login(source: &str, message: String) -> UsageSnapshot {
+    empty_snapshot("NeedLogin", source, message)
 }
 
-pub fn fetch_error(message: String) -> UsageSnapshot {
-    empty_snapshot("FetchError", message)
+pub fn fetch_error(source: &str, message: String) -> UsageSnapshot {
+    empty_snapshot("FetchError", source, message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn limits_become_tracks_and_missing_percent_is_skipped() {
+        let value = serde_json::json!({
+            "five_hour": { "utilization": 20, "resets_at": "2026-10-12T05:30:00.063513+00:00" },
+            "limits": [
+                { "kind": "session", "percent": 20, "severity": "normal",
+                  "resets_at": "2026-10-12T05:30:00.063513+00:00", "is_active": false },
+                { "kind": "weekly_all", "percent": 66, "is_active": true },
+                { "kind": "weekly_scoped", "percent": 0,
+                  "scope": { "model": { "id": null, "display_name": "Fable" } } },
+                { "kind": "mystery" }
+            ]
+        });
+        let tracks = tracks_from_usage(value).unwrap();
+        let labels: Vec<_> = tracks.iter().map(|t| t.label.as_str()).collect();
+        assert_eq!(labels, ["5시간", "주간", "주간 · Fable"]);
+        assert_eq!(tracks[1].percent, 66.0);
+        assert!(tracks[1].is_active);
+        assert_eq!(
+            tracks[0].resets_at.as_deref(),
+            Some("2026-10-12T05:30:00.063513+00:00")
+        );
+    }
+
+    #[test]
+    fn windows_fallback_only_uses_present_windows() {
+        let value = serde_json::json!({
+            "five_hour": { "utilization": 12.5, "resets_at": "2026-10-12T05:30:00+00:00" },
+            "seven_day": { "utilization": 40, "resets_at": null },
+            "seven_day_opus": null,
+            "seven_day_sonnet": { "utilization": null, "resets_at": null }
+        });
+        let tracks = tracks_from_usage(value).unwrap();
+        let kinds: Vec<_> = tracks
+            .iter()
+            .map(|t| (t.kind.as_str(), t.percent))
+            .collect();
+        assert_eq!(kinds, [("session", 12.5), ("weekly_all", 40.0)]);
+    }
+
+    #[test]
+    fn plan_label_with_multiplier() {
+        assert_eq!(
+            plan_label_from(Some("claude_max"), Some("default_claude_max_20x")).as_deref(),
+            Some("Max 20x")
+        );
+        assert_eq!(
+            plan_label_from(Some("claude_pro"), None).as_deref(),
+            Some("Pro")
+        );
+        assert_eq!(plan_label_from(None, Some("default_claude_max_20x")), None);
+    }
 }

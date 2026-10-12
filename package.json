@@ -12,7 +12,8 @@
     "make:icon": "python scripts/make_icon.py",
     "start:app": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/launch-user.ps1",
     "rebuild:app": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/rebuild-restart.ps1",
-    "spike": "python scripts/spike_usage.py"
+    "spike": "python scripts/spike_usage.py",
+    "spike:web": "node scripts/spike_web_session.mjs login"
   },
   "dependencies": {
     "@tauri-apps/api": "^2"

@@ -48,10 +48,10 @@ pub fn ensure_installed_release() -> Result<PathBuf, String> {
             fs::copy(&release, &dest).map_err(|e| format!("릴리스 복사 실패: {e}"))?;
             return Ok(dest);
         }
-        return Err(
+        Err(
             "시작프로그램/바로가기는 릴리스 실행 파일이 필요합니다.\n\n프로젝트의 「시작.bat」을 한 번 실행해 설치해 주세요."
                 .into(),
-        );
+        )
     }
 
     #[cfg(not(debug_assertions))]

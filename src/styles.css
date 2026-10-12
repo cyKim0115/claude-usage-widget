@@ -189,10 +189,12 @@ body {
 /* ── 설정 창 ──────────────────────────────────────────────────────────
    위젯은 transparent 창이라 html/body 배경이 투명하고 스크롤도 막혀 있습니다.
    설정 창은 일반 창이라 그 전역 규칙을 되돌려야 합니다. 선택자에 클래스를
-   더해 뒤에 오는 위젯 규칙보다 우선순위를 높입니다. */
+   더해 뒤에 오는 위젯 규칙보다 우선순위를 높입니다.
+   html은 overflow: hidden 그대로라, body를 창 높이에 고정해 body가 스크롤하게 둡니다.
+   min-height로 두면 body가 내용만큼 늘어나 스크롤할 곳이 없고 아래가 잘립니다. */
 body.settings-window-body {
   width: auto;
-  min-height: 100vh;
+  height: 100vh;
   overflow-y: auto;
   background: #16181c;
   color: var(--fg);
@@ -204,10 +206,12 @@ body.settings-window-body {
   user-select: text;
 }
 
+/* 아래 패딩은 닫기 버튼 줄(sticky)이 대신 가집니다. 여기 두면 끝까지 내려도
+   버튼 아래로 빈 띠가 남습니다. */
 .settings-window {
   max-width: 520px;
   margin: 0 auto;
-  padding: 20px 22px;
+  padding: 20px 22px 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -258,26 +262,32 @@ body.settings-window-body {
   background: rgba(248, 113, 113, 0.12);
 }
 
+/* 버튼은 창 가운데쯤에 있어서, 스크롤을 내린 채 누르면 위에 뜬 결과가 안 보입니다.
+   위에 붙여 두고, 아래 내용이 비치지 않게 배경을 불투명하게 섞어 둡니다. */
 .settings-status {
+  position: sticky;
+  top: 8px;
+  z-index: 2;
   margin: 0;
   padding: 10px 12px;
   border-radius: 10px;
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
-  background: rgba(255, 255, 255, 0.06);
+  background: #24262a;
   border: 1px solid var(--border);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
   color: var(--fg);
 }
 
 .settings-status--ok {
   border-color: rgba(52, 211, 153, 0.35);
-  background: rgba(52, 211, 153, 0.1);
+  background: #192b29;
 }
 
 .settings-status--error {
   border-color: rgba(248, 113, 113, 0.35);
-  background: rgba(248, 113, 113, 0.1);
+  background: #2d2125;
   color: #fecaca;
 }
 
@@ -381,8 +391,14 @@ body.settings-window-body {
   padding: 4px 6px;
 }
 
+/* 창이 화면보다 짧아도 닫기는 늘 보이게 아래에 붙여 둡니다. 위쪽은 흐리게 섞어
+   스크롤된 내용 위에 떠 있는 것이 드러나게 합니다. */
 .settings-footer--window {
-  padding-top: 4px;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 12px 0 18px;
+  background: linear-gradient(to bottom, rgba(22, 24, 28, 0), #16181c 14px);
 }
 
 .btn {

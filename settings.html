@@ -30,15 +30,41 @@
       <section class="settings-card">
         <h2 class="settings-card-title">계정</h2>
         <p class="settings-hint">
-          위젯은 Claude CLI가 저장한 자격증명을 읽습니다. 데스크톱 앱과 다른 계정으로
-          로그인돼 있을 수 있어 여기서 확인합니다.
+          위젯은 Claude Code(CLI) 자격증명이나 아래 웹 세션으로 사용량을 읽습니다. 두 소스의
+          계정이 다를 수 있어 지금 읽고 있는 소스와 계정을 여기서 확인합니다.
         </p>
+        <label class="settings-select">
+          <span>데이터 소스</span>
+          <select id="source-select">
+            <option value="auto">자동 (웹 세션 우선)</option>
+            <option value="claudeCode">Claude Code</option>
+            <option value="web">웹 세션</option>
+          </select>
+        </label>
         <div class="settings-field">
           <span class="settings-field-label" id="account-email">—</span>
           <p class="settings-detail" id="account-plan">불러오는 중…</p>
         </div>
         <div class="settings-actions">
           <button id="btn-refresh" class="btn secondary" type="button">사용량 새로고침</button>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <h2 class="settings-card-title">웹 세션</h2>
+        <p class="settings-hint">
+          위젯 전용 Chrome 창에서 claude.ai에 직접 로그인합니다. 평소 Chrome 프로필은 읽지 않습니다.
+          로그인을 마치면 창을 직접 닫아 주세요. 닫히면 위젯이 세션을 저장합니다.
+        </p>
+        <div class="settings-field">
+          <span class="settings-field-label" id="web-status">—</span>
+          <p class="settings-detail" id="web-detail"></p>
+        </div>
+        <p id="web-progress" class="settings-hint hidden" role="status" aria-live="polite"></p>
+        <div class="settings-actions">
+          <button id="btn-web-login" class="btn primary" type="button">브라우저로 로그인</button>
+          <button id="btn-web-disconnect" class="btn secondary" type="button">연결 해제</button>
+          <button id="btn-web-reset" class="btn secondary" type="button">로그인 프로필 초기화</button>
         </div>
       </section>
 

@@ -360,6 +360,27 @@ body.settings-window-body {
   accent-color: var(--fill);
 }
 
+.settings-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.settings-select select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  background: #23262b;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
 .settings-footer--window {
   padding-top: 4px;
 }

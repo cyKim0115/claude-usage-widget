@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { loadAlwaysOnTop } from "./preferences";
-import type { TrackUsage, UsageSnapshot } from "./types";
+import { loadAlwaysOnTop, loadDataSource } from "./preferences";
+import { needLoginHint, type TrackUsage, type UsageSnapshot } from "./types";
 
 const WINDOW_WIDTH = 340;
 
@@ -145,7 +145,7 @@ function render(snap: UsageSnapshot) {
   if (snap.tracks.length > 0) {
     tracks.append(...snap.tracks.map(buildTrack));
   } else if (snap.state === "NeedLogin") {
-    tracks.append(renderEmpty("터미널에서 claude auth login"));
+    tracks.append(renderEmpty(needLoginHint(snap, loadDataSource())));
   } else {
     tracks.append(renderEmpty("사용량을 불러오지 못했습니다"));
   }
@@ -175,11 +175,13 @@ function render(snap: UsageSnapshot) {
 
 async function refresh() {
   try {
-    const snap = await invoke<UsageSnapshot>("get_usage");
+    // 소스 선택은 설정 창이 localStorage에 둡니다. 바뀌면 refresh-requested로 알려 옵니다.
+    const snap = await invoke<UsageSnapshot>("get_usage", { source: loadDataSource() });
     render(snap);
   } catch (e) {
     render({
       state: "FetchError",
+      source: null,
       accountEmail: null,
       planLabel: null,
       tracks: [],

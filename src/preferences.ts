@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { DataSource } from "./types";
 
 export const ALWAYS_ON_TOP_KEY = "claude-usage-always-on-top";
+export const DATA_SOURCE_KEY = "claude-usage-data-source";
 
 /**
  * 위젯과 설정 창은 같은 origin(tauri://localhost)이라 localStorage를 공유합니다.
@@ -21,4 +23,13 @@ export function saveAlwaysOnTop(enabled: boolean) {
 export async function applyAlwaysOnTop(enabled: boolean) {
   saveAlwaysOnTop(enabled);
   await invoke("set_always_on_top", { enabled });
+}
+
+export function loadDataSource(): DataSource {
+  const value = localStorage.getItem(DATA_SOURCE_KEY);
+  return value === "claudeCode" || value === "web" ? value : "auto";
+}
+
+export function saveDataSource(source: DataSource) {
+  localStorage.setItem(DATA_SOURCE_KEY, source);
 }

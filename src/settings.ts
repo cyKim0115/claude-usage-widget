@@ -1,10 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
-import { applyAlwaysOnTop, loadAlwaysOnTop } from "./preferences";
-import { stateLabel, type UsageSnapshot } from "./types";
+import { applyAlwaysOnTop, loadAlwaysOnTop, loadDataSource, saveDataSource } from "./preferences";
+import {
+  needLoginHint,
+  sourceLabel,
+  stateLabel,
+  type DataSource,
+  type UsageSnapshot,
+  type WebStatus,
+} from "./types";
 
 let autostartEnabled = false;
 let isDevBuild = false;
+/** 로그인 창은 최대 10분 열려 있습니다. 설정 창은 숨겨 두고 재사용하므로 상태가 유지됩니다. */
+let webLoginRunning = false;
+let webStatus: WebStatus | null = null;
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -66,16 +76,112 @@ function renderAccount(snap: UsageSnapshot) {
 
   $("account-email").textContent = snap.accountEmail ?? "로그인 정보 없음";
 
+  // 두 소스의 계정이 다를 수 있어 어느 소스에서 읽었는지 같이 보여 줍니다.
+  const source = sourceLabel(snap.source);
+  const prefix = source ? `${source} · ` : "";
   const plan = $("account-plan");
   if (snap.state === "NeedLogin") {
-    plan.textContent = "터미널에서 claude auth login 을 실행한 뒤 새로고침하세요.";
+    plan.textContent = `${prefix}${needLoginHint(snap, loadDataSource())}`;
     return;
   }
   if (snap.state !== "OK") {
-    plan.textContent = snap.error ?? "사용량을 불러오지 못했습니다.";
+    plan.textContent = `${prefix}${snap.error ?? "사용량을 불러오지 못했습니다."}`;
     return;
   }
-  plan.textContent = snap.planLabel ?? "플랜 정보 없음";
+  plan.textContent = `${prefix}${snap.planLabel ?? "플랜 정보 없음"}`;
+}
+
+function formatTime(ms: number | null): string {
+  if (!ms) return "—";
+  return new Date(ms).toLocaleString("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function renderWebStatus() {
+  const status = $("web-status");
+  const detail = $("web-detail");
+  const state = webStatus?.state ?? "none";
+
+  if (state === "connected") {
+    status.textContent = `연결됨 · ${webStatus?.account ?? "계정 정보 없음"}`;
+    detail.textContent = `저장 ${formatTime(webStatus?.savedAt ?? null)} · 만료 예상 ${formatTime(webStatus?.expiresAt ?? null)}`;
+  } else if (state === "unreadable") {
+    status.textContent = "저장된 세션을 읽지 못했습니다";
+    detail.textContent = "다른 Windows 계정에서 저장됐거나 손상됐습니다. 다시 로그인하세요.";
+  } else {
+    status.textContent = "연결 안 됨";
+    detail.textContent = "";
+  }
+
+  ($("btn-web-login") as HTMLButtonElement).disabled = webLoginRunning;
+  ($("btn-web-disconnect") as HTMLButtonElement).disabled = webLoginRunning || state === "none";
+  ($("btn-web-reset") as HTMLButtonElement).disabled = webLoginRunning;
+}
+
+async function refreshWebStatus() {
+  webStatus = await invoke<WebStatus>("get_web_status");
+  renderWebStatus();
+}
+
+function setWebProgress(message: string | null) {
+  const el = $("web-progress");
+  el.textContent = message ?? "";
+  el.classList.toggle("hidden", !message);
+}
+
+async function onWebLogin() {
+  clearActionStatus();
+  webLoginRunning = true;
+  renderWebStatus();
+  setWebProgress("로그인 창을 여는 중…");
+  try {
+    webStatus = await invoke<WebStatus>("web_login");
+    setActionStatus("웹 세션을 연결했습니다.", "ok");
+    await emit("refresh-requested");
+  } catch (e) {
+    setActionStatus(String(e), "error");
+  } finally {
+    webLoginRunning = false;
+    setWebProgress(null);
+    renderWebStatus();
+  }
+}
+
+async function onWebDisconnect() {
+  clearActionStatus();
+  try {
+    webStatus = await invoke<WebStatus>("web_disconnect");
+    setActionStatus("웹 세션 연결을 해제했습니다.", "ok");
+    await emit("refresh-requested");
+  } catch (e) {
+    setActionStatus(String(e), "error");
+  }
+  renderWebStatus();
+}
+
+async function onWebReset() {
+  clearActionStatus();
+  const ok = window.confirm(
+    "위젯 전용 로그인 프로필과 저장된 세션을 모두 지웁니다. 다음 로그인 때 처음부터 로그인해야 합니다. 계속할까요?",
+  );
+  if (!ok) return;
+  try {
+    webStatus = await invoke<WebStatus>("web_reset_profile");
+    setActionStatus("로그인 프로필을 초기화했습니다.", "ok");
+    await emit("refresh-requested");
+  } catch (e) {
+    setActionStatus(String(e), "error");
+  }
+  renderWebStatus();
+}
+
+function renderDataSource() {
+  ($("source-select") as HTMLSelectElement).value = loadDataSource();
 }
 
 function renderAlwaysOnTop() {
@@ -122,7 +228,9 @@ async function closeWindow() {
 async function refreshView() {
   clearActionStatus();
   renderAlwaysOnTop();
+  renderDataSource();
   await refreshAutostart();
+  await refreshWebStatus();
   await requestUsage();
 }
 
@@ -143,13 +251,33 @@ async function onRefresh() {
 async function boot() {
   try {
     renderAlwaysOnTop();
+    renderDataSource();
     await refreshAutostart();
+    await refreshWebStatus();
 
     $("btn-close").addEventListener("click", () => {
       void closeWindow();
     });
     $("btn-refresh").addEventListener("click", () => {
       void onRefresh();
+    });
+
+    $("btn-web-login").addEventListener("click", () => {
+      void onWebLogin();
+    });
+    $("btn-web-disconnect").addEventListener("click", () => {
+      void onWebDisconnect();
+    });
+    $("btn-web-reset").addEventListener("click", () => {
+      void onWebReset();
+    });
+
+    // 위젯이 다음 조회에서 읽도록 저장만 하고 바로 새로고침을 요청합니다.
+    const sourceSelect = $("source-select") as HTMLSelectElement;
+    sourceSelect.addEventListener("change", async () => {
+      saveDataSource(sourceSelect.value as DataSource);
+      setActionStatus("데이터 소스를 바꿨습니다. 사용량을 다시 읽고 있습니다…", "ok");
+      await emit("refresh-requested");
     });
 
     const alwaysOnTopToggle = $("always-on-top-toggle") as HTMLInputElement;
@@ -196,6 +324,12 @@ async function boot() {
 
     await listen<UsageSnapshot>("usage-updated", (event) => {
       renderAccount(event.payload);
+      // 무인 갱신이 세션을 새로 저장했을 수 있습니다.
+      void refreshWebStatus();
+    });
+
+    await listen<string>("web-login-status", (event) => {
+      if (webLoginRunning) setWebProgress(event.payload);
     });
 
     // 창은 숨겨둔 채 재사용하므로, 다시 열릴 때마다 값을 새로 읽습니다.

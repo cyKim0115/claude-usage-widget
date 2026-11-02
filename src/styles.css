@@ -38,8 +38,8 @@ body {
 .widget {
   padding: 10px 12px 8px;
   border-radius: 12px;
-  /* 스퀘어클(superellipse)은 원보다 모서리를 덜 깎습니다. 배경 흐림을 켜면 OS 블러가
-     창 사각형 전체에 깔리는데, 덜 깎인 만큼 카드 밖 흐린 귀퉁이도 작아집니다. */
+  /* 배경 흐림을 켜면 Rust(glass.rs)가 블러를 이 곡선대로 자릅니다.
+     반경이나 모양을 바꾸면 glass.rs의 CORNER_RADIUS·SQUIRCLE_EXPONENT도 맞춰야 합니다. */
   corner-shape: squircle;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -49,8 +49,7 @@ body {
   gap: 8px;
 }
 
-/* OS가 창 뒤를 흐리고 카드는 틴트만 맡습니다. 흰 화면 위에서는 스퀘어클 밖 귀퉁이가
-   옅게 흐려 보입니다. 창 영역(SetWindowRgn)으로 잘라내면 가장자리가 계단처럼 깨져서 쓰지 않습니다. */
+/* 창 뒤 블러는 glass.rs가 카드 아래에 깔고, 카드는 틴트만 맡습니다. */
 html.glass .widget {
   background: var(--bg-glass);
 }

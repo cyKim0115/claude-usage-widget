@@ -238,6 +238,12 @@ pub fn run() {
             web_reset_profile
         ])
         .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let WindowEvent::Resized(size) = event {
+                    glass::on_resized(window, *size);
+                }
+                return;
+            }
             if window.label() != SETTINGS_LABEL {
                 return;
             }

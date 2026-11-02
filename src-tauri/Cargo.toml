@@ -24,3 +24,4 @@ ureq = { version = "2.12", features = ["json"] }
 thiserror = "2"
 tungstenite = "0.30"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+windows-version = "0.1"

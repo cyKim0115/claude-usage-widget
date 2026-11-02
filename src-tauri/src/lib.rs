@@ -1,5 +1,6 @@
 mod auth;
 mod browser_login;
+mod glass;
 mod install;
 mod secure_store;
 mod tray;
@@ -150,6 +151,25 @@ fn set_always_on_top(app: tauri::AppHandle, enabled: bool) -> Result<(), String>
     window.set_always_on_top(enabled).map_err(|e| e.to_string())
 }
 
+/// 설정은 웹뷰(localStorage)에 있어서, 위젯 부팅과 설정 창이 이걸로 창에 반영합니다.
+/// 실제로 켜졌는지 돌려주고 위젯 창에도 알려, 카드 투명도를 효과 상태에 맞춥니다.
+#[tauri::command]
+fn set_glass(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    let applied = glass::apply(&window, enabled);
+    window
+        .emit("glass-applied", applied)
+        .map_err(|e| e.to_string())?;
+    Ok(applied)
+}
+
+#[tauri::command]
+fn glass_supported() -> bool {
+    glass::supported()
+}
+
 #[tauri::command]
 fn is_dev_build() -> bool {
     cfg!(debug_assertions)
@@ -210,6 +230,8 @@ pub fn run() {
             is_autostart_enabled,
             install_release_copy,
             set_always_on_top,
+            set_glass,
+            glass_supported,
             get_web_status,
             web_login,
             web_disconnect,

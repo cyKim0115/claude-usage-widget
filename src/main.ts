@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { loadAlwaysOnTop, loadDataSource } from "./preferences";
+import { loadAlwaysOnTop, loadDataSource, loadGlass } from "./preferences";
 import { needLoginHint, type TrackUsage, type UsageSnapshot } from "./types";
 
 const WINDOW_WIDTH = 340;
@@ -12,6 +12,11 @@ function $(id: string): HTMLElement {
   const el = document.getElementById(id);
   if (!el) throw new Error(`missing #${id}`);
   return el;
+}
+
+/** 카드 투명도는 OS 효과가 실제로 켜졌을 때만 낮춥니다. 효과 없이 낮추면 뒤 글자가 선명하게 비칩니다. */
+function setGlassClass(applied: boolean) {
+  document.documentElement.classList.toggle("glass", applied);
 }
 
 function hideContextMenu() {
@@ -263,7 +268,21 @@ async function boot() {
     void refresh();
   });
 
+  // 설정 창에서 배경 흐림을 바꾸면 Rust가 효과를 적용한 뒤 결과를 보내 옵니다.
+  await listen<boolean>("glass-applied", (event) => {
+    setGlassClass(event.payload);
+  });
+
   await refresh();
+
+  // 창 높이를 카드에 맞춘 뒤 켭니다. 먼저 켜면 부팅 직후 160px 창에서 카드 아래
+  // 빈 곳이 흐린 띠로 보입니다.
+  await syncWindowHeight();
+  try {
+    setGlassClass(await invoke<boolean>("set_glass", { enabled: loadGlass() }));
+  } catch {
+    /* browser preview */
+  }
   let interval = 300_000;
   try {
     interval = await invoke<number>("get_poll_interval_ms");

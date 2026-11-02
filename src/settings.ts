@@ -1,7 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { applyAlwaysOnTop, loadAlwaysOnTop, loadDataSource, saveDataSource } from "./preferences";
+import {
+  applyAlwaysOnTop,
+  applyGlass,
+  loadAlwaysOnTop,
+  loadDataSource,
+  loadGlass,
+  saveDataSource,
+} from "./preferences";
 import {
   needLoginHint,
   sourceLabel,
@@ -18,6 +25,7 @@ const MIN_HEIGHT = 440;
 
 let autostartEnabled = false;
 let isDevBuild = false;
+let glassSupported = true;
 /** 로그인 창은 최대 10분 열려 있습니다. 설정 창은 숨겨 두고 재사용하므로 상태가 유지됩니다. */
 let webLoginRunning = false;
 let webStatus: WebStatus | null = null;
@@ -245,6 +253,21 @@ function renderAlwaysOnTop() {
   ($("always-on-top-toggle") as HTMLInputElement).checked = loadAlwaysOnTop();
 }
 
+/**
+ * Windows 11은 포커스가 없는 창의 유리 효과를 OS가 단색으로 바꿔서 끕니다.
+ * 저장값은 그대로 두고 토글만 막아, Windows 10 PC에서는 같은 설정이 살아 있게 합니다.
+ */
+async function renderGlass() {
+  const toggle = $("glass-toggle") as HTMLInputElement;
+  const hint = $("glass-hint");
+  glassSupported = await invoke<boolean>("glass_supported").catch(() => false);
+  toggle.disabled = !glassSupported;
+  toggle.checked = glassSupported && loadGlass();
+  hint.textContent = glassSupported
+    ? "위젯 뒤 화면을 흐리게 비춥니다. 켜면 모서리가 각지게 바뀝니다."
+    : "이 Windows에서는 쓸 수 없습니다. Windows 10에서만 동작합니다.";
+}
+
 function syncAutostartUi() {
   const toggle = $("autostart-toggle") as HTMLInputElement;
   const hint = $("autostart-hint");
@@ -285,6 +308,7 @@ async function closeWindow() {
 async function refreshView() {
   clearActionStatus();
   renderAlwaysOnTop();
+  await renderGlass();
   renderDataSource();
   // 위젯이 주기마다 보내는 사용량을 숨긴 채로도 받아 그려 두어서, 내용 높이는 이미 맞습니다.
   // 값을 다시 읽기 전에 먼저 맞춰야 창이 뜬 뒤 크기가 튀는 시간이 짧습니다.
@@ -311,6 +335,7 @@ async function onRefresh() {
 async function boot() {
   try {
     renderAlwaysOnTop();
+    await renderGlass();
     renderDataSource();
     await refreshAutostart();
     await refreshWebStatus();
@@ -351,6 +376,22 @@ async function boot() {
         );
       } catch (e) {
         alwaysOnTopToggle.checked = loadAlwaysOnTop();
+        setActionStatus(String(e), "error");
+      }
+    });
+
+    const glassToggle = $("glass-toggle") as HTMLInputElement;
+    glassToggle.addEventListener("change", async () => {
+      if (!glassSupported) return;
+      const enabled = glassToggle.checked;
+      try {
+        const applied = await applyGlass(enabled);
+        setActionStatus(
+          applied ? "위젯 배경을 흐리게 비춥니다." : "위젯 배경 흐림을 껐습니다.",
+          "ok",
+        );
+      } catch (e) {
+        glassToggle.checked = loadGlass();
         setActionStatus(String(e), "error");
       }
     });

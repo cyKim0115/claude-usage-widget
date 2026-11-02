@@ -3,6 +3,7 @@ import type { DataSource } from "./types";
 
 export const ALWAYS_ON_TOP_KEY = "claude-usage-always-on-top";
 export const DATA_SOURCE_KEY = "claude-usage-data-source";
+export const GLASS_KEY = "claude-usage-glass";
 
 /**
  * 위젯과 설정 창은 같은 origin(tauri://localhost)이라 localStorage를 공유합니다.
@@ -23,6 +24,21 @@ export function saveAlwaysOnTop(enabled: boolean) {
 export async function applyAlwaysOnTop(enabled: boolean) {
   saveAlwaysOnTop(enabled);
   await invoke("set_always_on_top", { enabled });
+}
+
+/** 지원하지 않는 Windows에서는 Rust가 알아서 끄므로, 비어 있으면 켬으로 봅니다. */
+export function loadGlass(): boolean {
+  return localStorage.getItem(GLASS_KEY) !== "false";
+}
+
+export function saveGlass(enabled: boolean) {
+  localStorage.setItem(GLASS_KEY, enabled ? "true" : "false");
+}
+
+/** 저장하고 위젯 창에 반영합니다. 실제로 켜졌는지 돌려줍니다. */
+export async function applyGlass(enabled: boolean): Promise<boolean> {
+  saveGlass(enabled);
+  return invoke<boolean>("set_glass", { enabled });
 }
 
 export function loadDataSource(): DataSource {

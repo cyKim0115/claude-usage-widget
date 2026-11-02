@@ -38,6 +38,9 @@ body {
 .widget {
   padding: 10px 12px 8px;
   border-radius: 12px;
+  /* 스퀘어클(superellipse)은 원보다 모서리를 덜 깎습니다. 배경 흐림을 켜면 OS 블러가
+     창 사각형 전체에 깔리는데, 덜 깎인 만큼 카드 밖 흐린 귀퉁이도 작아집니다. */
+  corner-shape: squircle;
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--fg);
@@ -46,11 +49,10 @@ body {
   gap: 8px;
 }
 
-/* OS가 창 뒤를 흐리고 카드는 틴트만 맡습니다. OS 블러는 창 사각형 전체에 깔려서,
-   둥근 모서리 밖 귀퉁이가 흐린 사각형으로 보이므로 모서리를 각지게 둡니다. */
+/* OS가 창 뒤를 흐리고 카드는 틴트만 맡습니다. 흰 화면 위에서는 스퀘어클 밖 귀퉁이가
+   옅게 흐려 보입니다. 창 영역(SetWindowRgn)으로 잘라내면 가장자리가 계단처럼 깨져서 쓰지 않습니다. */
 html.glass .widget {
   background: var(--bg-glass);
-  border-radius: 0;
 }
 
 /* Windows 「투명 효과」를 끄면 OS 블러도 꺼지므로 원래 카드 투명도로 돌아갑니다. */

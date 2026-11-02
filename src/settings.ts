@@ -264,7 +264,7 @@ async function renderGlass() {
   toggle.disabled = !glassSupported;
   toggle.checked = glassSupported && loadGlass();
   hint.textContent = glassSupported
-    ? "위젯 뒤 화면을 흐리게 비춥니다. 켜면 모서리가 각지게 바뀝니다."
+    ? "위젯 뒤 화면을 흐리게 비춥니다."
     : "이 Windows에서는 쓸 수 없습니다. Windows 10에서만 동작합니다.";
 }
 

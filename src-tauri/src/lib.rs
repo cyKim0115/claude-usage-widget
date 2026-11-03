@@ -165,14 +165,12 @@ fn set_glass(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
     Ok(applied)
 }
 
-/// 흐림 세기(0~1). 블러 반경은 못 바꿔서 블러 층의 불투명도로 섞습니다.
+/// 흐림 반경(CSS px). 캡처 여백을 맞추고, 위젯 창이 CSS blur 반경을 바꾸도록 알립니다.
 #[tauri::command]
-fn set_glass_strength(app: tauri::AppHandle, strength: f32) -> Result<(), String> {
-    let window = app
-        .get_webview_window("main")
-        .ok_or_else(|| "main window not found".to_string())?;
-    glass::set_strength(&window, strength);
-    Ok(())
+fn set_glass_blur(app: tauri::AppHandle, px: f64) -> Result<(), String> {
+    glass::set_blur(px);
+    app.emit_to("main", "glass-blur", px.clamp(0.0, glass::MAX_BLUR_PX))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -228,6 +226,8 @@ pub fn run() {
                 .with_denylist(&[SETTINGS_LABEL])
                 .build(),
         )
+        // 배경 흐림 캡처 프레임. 위젯 페이지가 http://glassbg.localhost/frame 으로 받아 갑니다.
+        .register_uri_scheme_protocol("glassbg", |_ctx, request| glass::frame_response(request))
         .invoke_handler(tauri::generate_handler![
             get_usage,
             get_poll_interval_ms,
@@ -241,7 +241,7 @@ pub fn run() {
             install_release_copy,
             set_always_on_top,
             set_glass,
-            set_glass_strength,
+            set_glass_blur,
             glass_supported,
             get_web_status,
             web_login,
@@ -250,8 +250,9 @@ pub fn run() {
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" {
-                if let WindowEvent::Resized(size) = event {
-                    glass::on_resized(window, *size);
+                // 배경 흐림은 창 뒤를 캡처하므로, 옮기거나 크기가 바뀌면 바로 다시 찍습니다.
+                if matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
+                    glass::wake();
                 }
                 return;
             }

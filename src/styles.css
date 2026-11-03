@@ -38,8 +38,7 @@ body {
 .widget {
   padding: 10px 12px 8px;
   border-radius: 12px;
-  /* 배경 흐림을 켜면 Rust(glass.rs)가 블러를 이 곡선대로 자릅니다.
-     반경이나 모양을 바꾸면 glass.rs의 CORNER_RADIUS·SQUIRCLE_EXPONENT도 맞춰야 합니다. */
+  /* 배경 흐림을 켜면 캡처 화면도 이 곡선으로 잘립니다(overflow: hidden). */
   corner-shape: squircle;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -49,15 +48,52 @@ body {
   gap: 8px;
 }
 
-/* 창 뒤 블러는 glass.rs가 카드 아래에 깔고, 카드는 틴트만 맡습니다. */
-html.glass .widget {
-  background: var(--bg-glass);
+/* ── 배경 흐림 ─────────────────────────────────────────────────────
+   glass.rs가 위젯 뒤 화면을 캡처해 보내면 main.ts가 캔버스에 그리고, 여기서 흐립니다.
+   쌓는 순서는 캔버스(-2) → 틴트(::before, -1) → 내용입니다. */
+.glass-backdrop {
+  display: none;
 }
 
-/* Windows 「투명 효과」를 끄면 OS 블러도 꺼지므로 원래 카드 투명도로 돌아갑니다. */
+html.glass .widget {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: transparent;
+  /* 테두리 칸은 overflow 클립 밖이라 캔버스·틴트가 덮지 못해, 흐리지 않은 화면이 1px 비칩니다.
+     테두리를 틴트 층의 inset 그림자로 옮기고 그만큼 안쪽 여백을 늘립니다. */
+  border: 0;
+  padding: 11px 13px 9px;
+}
+
+html.glass .widget::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  corner-shape: squircle;
+  background: var(--bg-glass);
+  box-shadow: inset 0 0 0 1px var(--border);
+  pointer-events: none;
+}
+
+html.glass .glass-backdrop {
+  display: block;
+  position: absolute;
+  z-index: -2;
+  filter: blur(var(--glass-blur, 12px));
+  pointer-events: none;
+}
+
+/* Windows 「투명 효과」를 끄면 흐린 배경을 숨기고 원래 카드 투명도로 돌아갑니다. */
 @media (prefers-reduced-transparency: reduce) {
-  html.glass .widget {
+  html.glass .widget::before {
     background: var(--bg);
+  }
+
+  html.glass .glass-backdrop {
+    display: none;
   }
 }
 

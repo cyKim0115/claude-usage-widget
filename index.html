@@ -9,6 +9,8 @@
   </head>
   <body>
     <div class="widget" id="widget" data-tauri-drag-region>
+      <!-- 배경 흐림: 위젯 뒤를 캡처한 화면. main.ts가 그리고 CSS가 흐립니다. -->
+      <canvas id="glass-backdrop" class="glass-backdrop" aria-hidden="true"></canvas>
       <header class="header" data-tauri-drag-region>
         <span class="title" data-tauri-drag-region>Claude Usage</span>
         <span id="plan" class="plan" data-tauri-drag-region></span>

@@ -25,17 +25,9 @@ thiserror = "2"
 tungstenite = "0.30"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
 windows-version = "0.1"
-# 유리 효과(glass.rs): Windows.UI.Composition으로 창 뒤 블러를 그리고 카드 모양대로 자릅니다.
-# tauri가 쓰는 windows 0.61과 버전을 맞춥니다.
+# 유리 효과(glass.rs): 위젯 뒤 화면을 캡처해 웹뷰로 넘깁니다. tauri가 쓰는 windows 0.61과 버전을 맞춥니다.
 windows = { version = "0.61", features = [
-  "Foundation_Numerics",
-  "Graphics",
-  "System",
-  "UI_Composition_Desktop",
-  "Win32_Graphics_Direct2D_Common",
-  "Win32_System_LibraryLoader",
-  "Win32_System_WinRT_Composition",
-  "Win32_System_WinRT_Graphics_Direct2D",
+  "Win32_Graphics_Gdi",
+  "Win32_UI_HiDpi",
+  "Win32_UI_WindowsAndMessaging",
 ] }
-windows-core = "0.61"
-windows-numerics = "0.2"

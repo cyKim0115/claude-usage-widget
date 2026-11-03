@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { loadAlwaysOnTop, loadDataSource, loadGlass, loadGlassStrength } from "./preferences";
+import { loadAlwaysOnTop, loadDataSource, loadGlass, loadGlassBlur } from "./preferences";
 import { needLoginHint, type TrackUsage, type UsageSnapshot } from "./types";
 
 const WINDOW_WIDTH = 340;
@@ -14,9 +14,62 @@ function $(id: string): HTMLElement {
   return el;
 }
 
-/** 카드 투명도는 OS 효과가 실제로 켜졌을 때만 낮춥니다. 효과 없이 낮추면 뒤 글자가 선명하게 비칩니다. */
+/** 카드 투명도는 배경 흐림이 실제로 켜졌을 때만 낮춥니다. 블러 없이 낮추면 뒤 글자가 선명하게 비칩니다. */
 function setGlassClass(applied: boolean) {
   document.documentElement.classList.toggle("glass", applied);
+  if (!applied) {
+    const canvas = $("glass-backdrop") as HTMLCanvasElement;
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+}
+
+function setGlassBlur(px: number) {
+  document.documentElement.style.setProperty("--glass-blur", `${px}px`);
+}
+
+/** glass.rs가 보내는 캡처 정보. 크기와 여백은 물리 픽셀입니다. */
+interface GlassFrame {
+  seq: number;
+  width: number;
+  height: number;
+  margin: number;
+}
+
+let glassBusy = false;
+let glassPending: GlassFrame | null = null;
+
+/**
+ * 위젯 뒤를 캡처한 화면을 카드 아래 캔버스에 그립니다. 블러는 CSS(--glass-blur)가 겁니다.
+ * 받아 오는 중에 새 프레임이 오면 마지막 것만 남겨 두었다가 이어서 그립니다.
+ */
+async function drawGlassFrame(frame: GlassFrame) {
+  glassBusy = true;
+  try {
+    const response = await fetch(`http://glassbg.localhost/frame?${frame.seq}`);
+    const bytes = new Uint8ClampedArray(await response.arrayBuffer());
+    if (bytes.length !== frame.width * frame.height * 4) return;
+    const canvas = $("glass-backdrop") as HTMLCanvasElement;
+    if (canvas.width !== frame.width || canvas.height !== frame.height) {
+      canvas.width = frame.width;
+      canvas.height = frame.height;
+    }
+    // 캔버스 왼쪽 위가 창 왼쪽 위에서 여백만큼 밖에 오도록 둡니다. 카드 테두리 두께도 뺍니다.
+    const scale = window.devicePixelRatio || 1;
+    const border = $("widget").clientLeft;
+    canvas.style.width = `${frame.width / scale}px`;
+    canvas.style.height = `${frame.height / scale}px`;
+    canvas.style.left = `${-frame.margin / scale - border}px`;
+    canvas.style.top = `${-frame.margin / scale - border}px`;
+    canvas.getContext("2d")?.putImageData(new ImageData(bytes, frame.width, frame.height), 0, 0);
+  } catch {
+    /* 다음 프레임에서 다시 그립니다 */
+  } finally {
+    glassBusy = false;
+    const next = glassPending;
+    glassPending = null;
+    if (next && document.documentElement.classList.contains("glass")) void drawGlassFrame(next);
+  }
 }
 
 function hideContextMenu() {
@@ -268,19 +321,28 @@ async function boot() {
     void refresh();
   });
 
-  // 설정 창에서 배경 흐림을 바꾸면 Rust가 효과를 적용한 뒤 결과를 보내 옵니다.
+  // 설정 창에서 배경 흐림을 바꾸면 Rust가 캡처를 켜고 끈 뒤 결과를 보내 옵니다.
   await listen<boolean>("glass-applied", (event) => {
     setGlassClass(event.payload);
+  });
+  await listen<number>("glass-blur", (event) => {
+    setGlassBlur(event.payload);
+  });
+  await listen<GlassFrame>("glass-frame", (event) => {
+    if (!document.documentElement.classList.contains("glass")) return;
+    if (glassBusy) {
+      glassPending = event.payload;
+      return;
+    }
+    void drawGlassFrame(event.payload);
   });
 
   await refresh();
 
-  // 창 높이를 카드에 맞춘 뒤 켭니다. 먼저 켜면 부팅 직후 160px 창에서 카드 아래
-  // 빈 곳이 흐린 띠로 보입니다.
   await syncWindowHeight();
   try {
-    // 세기를 먼저 넘겨 두면 블러가 처음 뜰 때부터 저장된 세기로 나옵니다.
-    await invoke("set_glass_strength", { strength: loadGlassStrength() / 100 });
+    // 반경을 먼저 넘겨야 첫 캡처부터 그 반경에 맞는 여백으로 찍습니다.
+    await invoke("set_glass_blur", { px: loadGlassBlur() });
     setGlassClass(await invoke<boolean>("set_glass", { enabled: loadGlass() }));
   } catch {
     /* browser preview */

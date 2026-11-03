@@ -4,11 +4,11 @@ import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import {
   applyAlwaysOnTop,
   applyGlass,
-  applyGlassStrength,
+  applyGlassBlur,
   loadAlwaysOnTop,
   loadDataSource,
   loadGlass,
-  loadGlassStrength,
+  loadGlassBlur,
   saveDataSource,
 } from "./preferences";
 import {
@@ -256,8 +256,8 @@ function renderAlwaysOnTop() {
 }
 
 /**
- * Windows 11은 포커스가 없는 창의 유리 효과를 OS가 단색으로 바꿔서 끕니다.
- * 저장값은 그대로 두고 토글만 막아, Windows 10 PC에서는 같은 설정이 살아 있게 합니다.
+ * 배경 흐림은 캡처에서 위젯을 빼는 기능(Windows 10 2004 이상)이 있어야 합니다.
+ * 저장값은 그대로 두고 토글만 막아, 지원하는 PC에서는 같은 설정이 살아 있게 합니다.
  */
 async function renderGlass() {
   const toggle = $("glass-toggle") as HTMLInputElement;
@@ -267,16 +267,16 @@ async function renderGlass() {
   toggle.checked = glassSupported && loadGlass();
   hint.textContent = glassSupported
     ? "위젯 뒤 화면을 흐리게 비춥니다."
-    : "이 Windows에서는 쓸 수 없습니다. Windows 10에서만 동작합니다.";
-  renderGlassStrength(loadGlassStrength());
+    : "이 Windows에서는 쓸 수 없습니다. Windows 10 2004 이상에서 동작합니다.";
+  renderGlassBlur(loadGlassBlur());
 }
 
-/** 세기 슬라이더는 배경 흐림이 켜져 있을 때만 씁니다. */
-function renderGlassStrength(percent: number) {
-  const slider = $("glass-strength") as HTMLInputElement;
-  slider.value = String(percent);
+/** 반경 슬라이더는 배경 흐림이 켜져 있을 때만 씁니다. */
+function renderGlassBlur(px: number) {
+  const slider = $("glass-blur") as HTMLInputElement;
+  slider.value = String(px);
   slider.disabled = !(glassSupported && loadGlass());
-  $("glass-strength-value").textContent = `${percent}%`;
+  $("glass-blur-value").textContent = `${px}px`;
 }
 
 function syncAutostartUi() {
@@ -405,16 +405,16 @@ async function boot() {
         glassToggle.checked = loadGlass();
         setActionStatus(String(e), "error");
       }
-      renderGlassStrength(loadGlassStrength());
+      renderGlassBlur(loadGlassBlur());
     });
 
     // 슬라이더를 움직이는 동안에도 바로 보이도록 input마다 위젯에 반영합니다.
-    const glassStrength = $("glass-strength") as HTMLInputElement;
-    glassStrength.addEventListener("input", async () => {
-      const percent = Number(glassStrength.value);
-      $("glass-strength-value").textContent = `${percent}%`;
+    const glassBlur = $("glass-blur") as HTMLInputElement;
+    glassBlur.addEventListener("input", async () => {
+      const px = Number(glassBlur.value);
+      $("glass-blur-value").textContent = `${px}px`;
       try {
-        await applyGlassStrength(percent);
+        await applyGlassBlur(px);
       } catch (e) {
         setActionStatus(String(e), "error");
       }

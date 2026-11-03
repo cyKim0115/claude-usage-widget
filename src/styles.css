@@ -399,6 +399,32 @@ body.settings-window-body {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.settings-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.settings-range input {
+  flex: 1;
+  accent-color: var(--fill);
+}
+
+.settings-range output {
+  min-width: 3.2em;
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-range:has(input:disabled) {
+  opacity: 0.5;
+}
+
 .settings-select select {
   font: inherit;
   font-size: 12px;

@@ -6,8 +6,9 @@
 //!
 //! 그래서 블러를 직접 그립니다. 창에 HOSTBACKDROP accent를 켜고, Windows.UI.Composition의
 //! HostBackdrop 브러시(시스템이 흐려 둔 창 뒤 화면)를 웹뷰 아래에 깐 뒤 카드와 같은
-//! 스퀘어클로 자릅니다. 클립은 벡터라 가장자리가 매끈합니다. 블러 세기는 Windows Acrylic과 같고
-//! 조절할 수 없습니다.
+//! 스퀘어클로 자릅니다. 클립은 벡터라 가장자리가 매끈합니다. 블러 반경은 Windows Acrylic과 같고
+//! 조절할 수 없어서, 「흐림 세기」는 블러 층의 불투명도로 흐린 화면과 원래 화면을 섞습니다.
+//! 낮추면 흐려지지 않은 뒤 글자가 옅게 겹쳐 보입니다.
 //!
 //! Windows 10 1903~22H2에서만 켭니다(경로 클립이 1903부터). 포커스가 없어도 유지되고,
 //! 끌 때 비용은 효과를 끈 창과 같습니다(19045 실측). Windows 11은 시험하지 않아 끕니다.
@@ -15,7 +16,7 @@
 
 use std::cell::RefCell;
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use tauri::{PhysicalSize, WebviewWindow};
 use windows::core::{implement, s, w, Interface, Ref, Result};
@@ -58,6 +59,8 @@ const WCA_ACCENT_POLICY: u32 = 0x13;
 
 /// 효과가 켜져 있는지. 창 크기가 바뀔 때 블러를 다시 맞출지 정합니다.
 static ACTIVE: AtomicBool = AtomicBool::new(false);
+/// 흐림 세기(블러 층 불투명도, 0~1)를 f32 비트로 둡니다. 기본값 1.0.
+static STRENGTH: AtomicU32 = AtomicU32::new(0x3F80_0000);
 
 thread_local! {
     /// Composition 객체는 만든 스레드(메인 스레드)에서만 다룹니다.
@@ -102,6 +105,23 @@ pub fn apply(window: &WebviewWindow, enabled: bool) -> bool {
     on
 }
 
+/// 흐림 세기를 0~1로 받아 저장하고, 블러가 떠 있으면 바로 반영합니다.
+pub fn set_strength(window: &WebviewWindow, strength: f32) {
+    let strength = strength.clamp(0.0, 1.0);
+    STRENGTH.store(strength.to_bits(), Ordering::Relaxed);
+    let _ = window.run_on_main_thread(move || {
+        BACKDROP.with(|cell| {
+            if let Some(backdrop) = cell.borrow().as_ref() {
+                let _ = backdrop.visual.SetOpacity(strength);
+            }
+        });
+    });
+}
+
+fn strength() -> f32 {
+    f32::from_bits(STRENGTH.load(Ordering::Relaxed))
+}
+
 /// 위젯 높이는 렌더마다 바뀝니다. 블러 크기와 클립도 그때마다 맞춥니다.
 /// on_window_event는 메인 스레드에서 불립니다.
 pub fn on_resized(window: &tauri::Window, size: PhysicalSize<u32>) {
@@ -129,6 +149,7 @@ fn show(hwnd: HWND, size: PhysicalSize<u32>, scale: f64) -> Result<()> {
         }
         let backdrop = slot.as_ref().expect("backdrop was just created");
         backdrop.fit(size, scale)?;
+        backdrop.visual.SetOpacity(strength())?;
         backdrop.visual.SetIsVisible(true)
     })
 }

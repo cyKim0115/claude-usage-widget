@@ -165,6 +165,16 @@ fn set_glass(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
     Ok(applied)
 }
 
+/// 흐림 세기(0~1). 블러 반경은 못 바꿔서 블러 층의 불투명도로 섞습니다.
+#[tauri::command]
+fn set_glass_strength(app: tauri::AppHandle, strength: f32) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    glass::set_strength(&window, strength);
+    Ok(())
+}
+
 #[tauri::command]
 fn glass_supported() -> bool {
     glass::supported()
@@ -231,6 +241,7 @@ pub fn run() {
             install_release_copy,
             set_always_on_top,
             set_glass,
+            set_glass_strength,
             glass_supported,
             get_web_status,
             web_login,

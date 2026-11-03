@@ -4,6 +4,7 @@ import type { DataSource } from "./types";
 export const ALWAYS_ON_TOP_KEY = "claude-usage-always-on-top";
 export const DATA_SOURCE_KEY = "claude-usage-data-source";
 export const GLASS_KEY = "claude-usage-glass";
+export const GLASS_STRENGTH_KEY = "claude-usage-glass-strength";
 
 /**
  * 위젯과 설정 창은 같은 origin(tauri://localhost)이라 localStorage를 공유합니다.
@@ -39,6 +40,19 @@ export function saveGlass(enabled: boolean) {
 export async function applyGlass(enabled: boolean): Promise<boolean> {
   saveGlass(enabled);
   return invoke<boolean>("set_glass", { enabled });
+}
+
+/** 흐림 세기(%). 블러 층의 불투명도라 100이 가장 흐리고 0이면 블러가 없습니다. */
+export function loadGlassStrength(): number {
+  const raw = localStorage.getItem(GLASS_STRENGTH_KEY);
+  const value = raw === null ? NaN : Number(raw);
+  return Number.isNaN(value) ? 100 : Math.min(100, Math.max(0, value));
+}
+
+/** 저장하고 위젯 창에 반영합니다. */
+export async function applyGlassStrength(percent: number) {
+  localStorage.setItem(GLASS_STRENGTH_KEY, String(percent));
+  await invoke("set_glass_strength", { strength: percent / 100 });
 }
 
 export function loadDataSource(): DataSource {

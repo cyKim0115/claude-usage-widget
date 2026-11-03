@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { loadAlwaysOnTop, loadDataSource, loadGlass } from "./preferences";
+import { loadAlwaysOnTop, loadDataSource, loadGlass, loadGlassStrength } from "./preferences";
 import { needLoginHint, type TrackUsage, type UsageSnapshot } from "./types";
 
 const WINDOW_WIDTH = 340;
@@ -279,6 +279,8 @@ async function boot() {
   // 빈 곳이 흐린 띠로 보입니다.
   await syncWindowHeight();
   try {
+    // 세기를 먼저 넘겨 두면 블러가 처음 뜰 때부터 저장된 세기로 나옵니다.
+    await invoke("set_glass_strength", { strength: loadGlassStrength() / 100 });
     setGlassClass(await invoke<boolean>("set_glass", { enabled: loadGlass() }));
   } catch {
     /* browser preview */

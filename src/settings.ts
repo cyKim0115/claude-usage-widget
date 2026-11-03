@@ -4,9 +4,11 @@ import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import {
   applyAlwaysOnTop,
   applyGlass,
+  applyGlassStrength,
   loadAlwaysOnTop,
   loadDataSource,
   loadGlass,
+  loadGlassStrength,
   saveDataSource,
 } from "./preferences";
 import {
@@ -266,6 +268,15 @@ async function renderGlass() {
   hint.textContent = glassSupported
     ? "위젯 뒤 화면을 흐리게 비춥니다."
     : "이 Windows에서는 쓸 수 없습니다. Windows 10에서만 동작합니다.";
+  renderGlassStrength(loadGlassStrength());
+}
+
+/** 세기 슬라이더는 배경 흐림이 켜져 있을 때만 씁니다. */
+function renderGlassStrength(percent: number) {
+  const slider = $("glass-strength") as HTMLInputElement;
+  slider.value = String(percent);
+  slider.disabled = !(glassSupported && loadGlass());
+  $("glass-strength-value").textContent = `${percent}%`;
 }
 
 function syncAutostartUi() {
@@ -392,6 +403,19 @@ async function boot() {
         );
       } catch (e) {
         glassToggle.checked = loadGlass();
+        setActionStatus(String(e), "error");
+      }
+      renderGlassStrength(loadGlassStrength());
+    });
+
+    // 슬라이더를 움직이는 동안에도 바로 보이도록 input마다 위젯에 반영합니다.
+    const glassStrength = $("glass-strength") as HTMLInputElement;
+    glassStrength.addEventListener("input", async () => {
+      const percent = Number(glassStrength.value);
+      $("glass-strength-value").textContent = `${percent}%`;
+      try {
+        await applyGlassStrength(percent);
+      } catch (e) {
         setActionStatus(String(e), "error");
       }
     });

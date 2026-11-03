@@ -110,8 +110,25 @@ pub fn wake() {
     }
 }
 
+/// 캡처 프레임을 읽어 갈 수 있는 페이지 출처. 빌드된 위젯(Windows)과 개발 서버입니다.
+const FRAME_ORIGINS: [&str; 3] = [
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+    "http://localhost:1420",
+];
+
 /// `http://glassbg.localhost/frame`: 가장 최근 캡처의 RGBA 바이트.
-pub fn frame_response(_request: Request<Vec<u8>>) -> Response<Vec<u8>> {
+///
+/// 화면 캡처라 위젯 창(main)의 요청에만 답하고, CORS도 앱 자신의 출처에만 엽니다.
+pub fn frame_response(webview_label: &str, request: Request<Vec<u8>>) -> Response<Vec<u8>> {
+    let origin = request
+        .headers()
+        .get("Origin")
+        .and_then(|value| value.to_str().ok())
+        .filter(|origin| FRAME_ORIGINS.contains(origin));
+    let (Some(origin), "main") = (origin, webview_label) else {
+        return Response::builder().status(403).body(Vec::new()).unwrap();
+    };
     let body = FRAME
         .lock()
         .unwrap()
@@ -120,7 +137,7 @@ pub fn frame_response(_request: Request<Vec<u8>>) -> Response<Vec<u8>> {
         .unwrap_or_default();
     Response::builder()
         .header("Content-Type", "application/octet-stream")
-        .header("Access-Control-Allow-Origin", "*")
+        .header("Access-Control-Allow-Origin", origin)
         .header("Cache-Control", "no-store")
         .body(body)
         .unwrap()

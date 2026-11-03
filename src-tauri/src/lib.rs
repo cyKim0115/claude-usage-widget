@@ -227,7 +227,9 @@ pub fn run() {
                 .build(),
         )
         // 배경 흐림 캡처 프레임. 위젯 페이지가 http://glassbg.localhost/frame 으로 받아 갑니다.
-        .register_uri_scheme_protocol("glassbg", |_ctx, request| glass::frame_response(request))
+        .register_uri_scheme_protocol("glassbg", |ctx, request| {
+            glass::frame_response(ctx.webview_label(), request)
+        })
         .invoke_handler(tauri::generate_handler![
             get_usage,
             get_poll_interval_ms,

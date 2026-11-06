@@ -17,12 +17,12 @@
   </head>
   <body class="settings-window-body">
     <div class="settings-window">
-      <header class="settings-header">
-        <div class="settings-header-row">
-          <h1>Claude Usage 설정</h1>
-          <span id="connection-badge" class="settings-badge">—</span>
-        </div>
-        <p class="settings-subtitle">계정·위젯·앱 옵션을 한곳에서 관리합니다.</p>
+      <header class="settings-titlebar">
+        <h1>Claude Usage 설정</h1>
+        <span id="connection-badge" class="settings-badge">—</span>
+        <button id="btn-titlebar-close" class="titlebar-close" type="button" title="닫기 (Esc)" aria-label="닫기">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg>
+        </button>
       </header>
 
       <div id="action-status" class="settings-status hidden" role="status" aria-live="polite"></div>
